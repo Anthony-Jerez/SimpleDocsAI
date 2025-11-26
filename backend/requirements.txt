@@ -12,3 +12,5 @@ llama-index-llms-openai
 llama-index-vector-stores-chroma
 # (optional) TTS client later
 elevenlabs
+requests
+livekit-api
