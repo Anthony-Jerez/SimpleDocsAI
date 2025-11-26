@@ -4,6 +4,7 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.llms.openai import OpenAI
 from .ingestion import get_collection
 from .utils import load_json, summaries_json_path, save_json, docs_json_path
+from .tts import synthesize_and_cache  # <-- NEW
 
 llm = OpenAI(temperature=0.2)  # uses OPENAI_LLM_MODEL from Settings
 
@@ -59,25 +60,19 @@ def _select_cover_nodes(index: VectorStoreIndex, k: int = 20) -> List[str]:
             if t and t not in seen:
                 texts.append((n.node.metadata.get("page", 0), t))
                 seen.add(t)
-    # sort by page to keep narrative roughly aligned
     texts.sort(key=lambda x: x[0])
     return [f"[p:{p}] {t}" for p, t in texts]
 
 def summarize_spanish(doc_id: str) -> Dict:
-    """Map→Reduce Spanish summary grounded on the English text."""
-    # Load raw pages to assist with per-page map step
+    """Map→Reduce Spanish summary grounded on the English text; now returns an audio_url."""
     raw = load_json(docs_json_path(doc_id))
-    pages = raw.get("pages", [])
+    _ = raw.get("pages", [])
 
-    # Build index wrapper (for later verification/expansion if needed)
     index = get_index(doc_id)
 
-    # MAP: summarize each page's most relevant spans (use a coverage set instead of all pages)
     cover_nodes = _select_cover_nodes(index, k=24)
     mini_summaries = []
     for item in cover_nodes:
-        # item looks like "[p:X] text..."
-        # extract page
         try:
             prefix, chunk = item.split("] ", 1)
             page = int(prefix.replace("[p:", ""))
@@ -87,11 +82,17 @@ def summarize_spanish(doc_id: str) -> Dict:
         msg = MAP_PROMPT_ES.format(page=page or "?", chunk=chunk[:4000])
         mini_summaries.append(llm.complete(msg).text.strip())
 
-    # REDUCE: combine all mini summaries into a single parent-friendly summary
     reduce_in = "\n\n".join(mini_summaries)
     final_summary = llm.complete(REDUCE_PROMPT_ES.format(mini_summaries=reduce_in)).text.strip()
 
-    # Save & return
-    out = {"doc_id": doc_id, "summary_es": final_summary, "mini": mini_summaries}
+    # NEW: TTS (cached) — returns local /audio/<hash>.mp3 URL if API key & voice_id are set
+    _, rel_url = synthesize_and_cache(final_summary)
+
+    out = {
+        "doc_id": doc_id,
+        "summary_es": final_summary,
+        "mini": mini_summaries,
+        "audio_url": rel_url  # may be None if TTS not configured
+    }
     save_json(summaries_json_path(doc_id), out)
     return out

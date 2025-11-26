@@ -2,13 +2,19 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import io
-
 from .utils import new_doc_id, load_json, summaries_json_path, answers_json_path, save_json
 from .ingestion import save_upload, extract_pages, build_index_for_doc
 from .summarize import summarize_spanish
 from .ask import answer_spanish
+from fastapi.staticfiles import StaticFiles
+from .config import AUDIO_DIR
+from pydantic import BaseModel, Field
+from typing import Optional
+from .config import LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET
+from .tokens import mint_join_token
 
-app = FastAPI(title="Doc Summarizer Backend (EN→ES)")
+app = FastAPI(title="Doc Summarizer Backend (EN->ES)")
+app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
 
 # CORS (open for local testing)
 app.add_middleware(
@@ -70,3 +76,41 @@ def ask(body: AskBody):
     # Save a trace for debugging
     save_json(answers_json_path(body.doc_id), ans)
     return ans
+
+
+class TokenRequest(BaseModel):
+    room: str = Field(..., description="Room name to join (will be auto-created on first join)")
+    identity: Optional[str] = Field(None, description="Participant identity (optional, server will generate if empty)")
+    name: Optional[str] = Field(None, description="Display name (optional)")
+    can_publish: bool = True
+    can_subscribe: bool = True
+
+class TokenResponse(BaseModel):
+    token: str
+    url: str
+    room: str
+    identity: str
+
+@app.get("/livekit/health")
+def livekit_health():
+    ok = bool(LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET)
+    return {
+        "livekit_configured": ok,
+        "url_present": bool(LIVEKIT_URL),
+        "api_key_present": bool(LIVEKIT_API_KEY),
+        "api_secret_present": bool(LIVEKIT_API_SECRET),
+    }
+
+@app.post("/livekit/token", response_model=TokenResponse)
+def livekit_token(req: TokenRequest):
+    if not LIVEKIT_URL or not LIVEKIT_API_KEY or not LIVEKIT_API_SECRET:
+        raise HTTPException(status_code=500, detail="LiveKit env vars missing")
+
+    token, identity = mint_join_token(
+        room=req.room,
+        identity=req.identity,
+        name=req.name,
+        can_publish=req.can_publish,
+        can_subscribe=req.can_subscribe,
+    )
+    return TokenResponse(token=token, url=LIVEKIT_URL, room=req.room, identity=identity)

@@ -5,7 +5,7 @@ from llama_index.llms.openai import OpenAI
 from .ingestion import get_collection
 
 # For more ore deterministic outputs
-llm = OpenAI(temperature=0.1)
+llm = OpenAI(temperature=0.2)
 
 ANSWER_PROMPT_ES = """Eres un asistente claro y preciso. Responde en ESPAÑOL (nivel 6.º grado).
 Usa SOLO la información del CONTEXTO. Si no está en el contexto, di que no aparece.
