@@ -8,6 +8,8 @@ SimpleDocsAI empowers users to understand complex academic, medical, and other f
 
 ## Features
 
+## Tech Stack
+
 ## Demo
 
 ## Setup
