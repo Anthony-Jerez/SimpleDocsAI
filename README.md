@@ -9,6 +9,15 @@ SimpleDocsAI empowers users to understand complex academic, medical, and other f
 ## Features
 
 ## Tech Stack
+- React
+- Tailwind CSS
+- Typescript
+- Python
+- FastAPI
+- LlamaIndex
+- Chroma
+- ElevenLabs TTS
+- LiveKit 
 
 ## Demo
 
