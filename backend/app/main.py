@@ -1,7 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import io
 from .utils import new_doc_id, load_json, summaries_json_path, answers_json_path, save_json
 from .ingestion import save_upload, extract_pages, build_index_for_doc
 from .summarize import summarize_spanish
@@ -12,6 +11,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from .config import LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET
 from .tokens import mint_join_token
+from .summarize_text import summarize_text_to_spanish
 
 app = FastAPI(title="Doc Summarizer Backend (EN->ES)")
 app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
@@ -114,3 +114,27 @@ def livekit_token(req: TokenRequest):
         can_subscribe=req.can_subscribe,
     )
     return TokenResponse(token=token, url=LIVEKIT_URL, room=req.room, identity=identity)
+
+class SummarizeTextBody(BaseModel):
+    text: str
+    # Future-proof: you can widen later; for now we only support Spanish output.
+    target_lang: str = "es"
+
+class SummarizeTextResp(BaseModel):
+    doc_id: str
+    summary_es: str
+    audio_url: Optional[str] = None
+
+@app.post("/summarize_text", response_model=SummarizeTextResp)
+def summarize_text_api(body: SummarizeTextBody):
+    """
+    Direct LLM summary for pasted text (EN -> ES). No RAG.
+    Returns same shape as /summarize so the frontend can render identically.
+    """
+    if body.target_lang != "es":
+        # MVP: we only support Spanish; later you can branch prompts by lang code.
+        raise HTTPException(status_code=400, detail="Only 'es' is supported for now.")
+
+    out = summarize_text_to_spanish(body.text)
+    # Use a synthetic doc_id to satisfy the same shape as PDF summarize.
+    return {"doc_id": "text_snippet", **out}
