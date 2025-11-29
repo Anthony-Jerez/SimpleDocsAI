@@ -4,7 +4,7 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.llms.openai import OpenAI
 from .ingestion import get_collection
 from .utils import load_json, summaries_json_path, save_json, docs_json_path
-from .tts import synthesize_and_cache  # <-- NEW
+from .tts import synthesize_and_cache
 
 llm = OpenAI(temperature=0.2)  # uses OPENAI_LLM_MODEL from Settings
 
